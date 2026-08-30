@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "StockMonitor": {
+      "commandName": "Project",
+      "commandLineArgs": "PETR 23.45 25.6"
+    }
+  }
+}
