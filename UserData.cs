@@ -1,3 +1,4 @@
+using StockMonitor.ConfReader;
 using System.Globalization;
 using static StockMonitor.Logger;
 
@@ -9,6 +10,8 @@ namespace StockMonitor
 		// Usando decimal por ser "financeiramente aceitavel "
 		public decimal MinimumPrice { get; }
 		public decimal MaximumPrice { get; }
+		public AppConfiguration? Configuration { get; internal set; }
+		public EnvironmentConfiguration? Environment { get; internal set; }
 
 		public UserData(string stockSymbol, decimal minimumPrice, decimal maximumPrice)
 		{

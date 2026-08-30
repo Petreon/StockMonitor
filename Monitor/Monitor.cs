@@ -1,6 +1,6 @@
 using System.Net.Http;
 
-namespace StockMonitor
+namespace StockMonitor.Monitor
 {
 	public enum ConnectionType
 	{
@@ -12,7 +12,7 @@ namespace StockMonitor
 	{
 		private readonly UserData mUserData;
 		
-		private String	mStockName;
+		private string	mStockName;
 		private Task	mMonitorTask;
 		private CancellationTokenSource mCancellationToken;	//cancellation token pra liberar a task
 
@@ -20,10 +20,10 @@ namespace StockMonitor
 		// não tenha um custo alto
 
 		private HttpClient mHttpClient;		// client para fazer request para api financeira
-		private String mBrapiToken;         // brapi token
+		private string mBrapiToken;         // brapi token
 
 
-		public Monitor(UserData userData, ConnectionType connection, String Token)
+		public Monitor(UserData userData, ConnectionType connection, string Token)
 		{
 			if (userData is null)
 			{

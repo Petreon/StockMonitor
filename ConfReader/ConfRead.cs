@@ -1,33 +1,27 @@
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
-namespace StockMonitor
+namespace StockMonitor.ConfReader
 {
 	internal class ConfRead
 	{
-		private readonly UserData mUserData;
 		private readonly string mYamlPath;
 		private AppConfiguration mConfiguration { get; }
 
 
-		public ConfRead(UserData userData, string yamlPath = "config.yaml")
+		public ConfRead(string yamlPath = "config.yaml")
 		{
-			if (userData is null)
-			{
-				const string message = "A referência de UserData não pode ser nula.";
-				Logger.LogAndThrow(message, nameof(userData));
-			}
-
 			if (string.IsNullOrWhiteSpace(yamlPath))
 			{
 				const string message = "O caminho do arquivo YAML não pode ser vazio.";
 				Logger.LogAndThrow(message, nameof(yamlPath));
 			}
 
-			mUserData = userData!;
 			mYamlPath = ResolveYamlPath(yamlPath);
 			mConfiguration = ReadYaml();
 		}
+
+		public AppConfiguration Configuration => mConfiguration;
 
 
 		private AppConfiguration ReadYaml()
@@ -71,7 +65,6 @@ namespace StockMonitor
 			return Path.IsPathRooted(yamlPath)
 				? yamlPath
 				: Path.Combine(AppContext.BaseDirectory, yamlPath);
-			return Path.Combine(AppContext.BaseDirectory, yamlPath);
 		}
 
 		private void ValidateConfiguration(AppConfiguration configuration)

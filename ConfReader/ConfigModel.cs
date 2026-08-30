@@ -1,4 +1,6 @@
-namespace StockMonitor
+using StockMonitor.Monitor;
+
+namespace StockMonitor.ConfReader
 {
 	public sealed class AppConfiguration
 	{
@@ -33,5 +35,13 @@ namespace StockMonitor
 	{
 		public int SendIntervalSeconds { get; set; }
 		public int MaxQueuedEvents { get; set; }
+	}
+
+	public sealed class EnvironmentConfiguration
+	{
+		public string BrapiToken { get; init; } = string.Empty;
+		public string WebSocketToken { get; init; } = string.Empty;
+		public string SmtpUsername { get; init; } = string.Empty;
+		public string SmtpPassword { get; init; } = string.Empty;
 	}
 }
