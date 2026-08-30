@@ -158,6 +158,7 @@ namespace StockMonitor.Monitor
 
 				mHttpClient.Dispose();
 				mCancellationTokenSource.Dispose();
+				Logger.PrintLog(LogLevel.Info, "Monitoramento HTTP encerrado e recursos liberados.");
 			}
 		}
 	}

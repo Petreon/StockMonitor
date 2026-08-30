@@ -36,18 +36,47 @@ namespace StockMonitor
 				return 1;
 			}
 
-			Alarm alarm			= new(userData);
+			Alarm alarm = new(userData);
 
-			// starts the monitoring Task in background
-			await using IMonitor monitor = new MonitorHttp(userData, alarm);
-
-
-			while (true)
+			await using IMonitor monitor = CreateMonitor(userData, alarm);
+			using CancellationTokenSource shutdown = new();
+			ConsoleCancelEventHandler cancelHandler = (_, eventArgs) =>
 			{
-				
+				eventArgs.Cancel = true;
+				shutdown.Cancel();
+			};
+
+			Console.CancelKeyPress += cancelHandler;
+			try
+			{
+				Logger.PrintLog(LogLevel.Info, "Monitoramento iniciado. Pressione Ctrl+C para encerrar.");
+				Task shutdownTask = Task.Delay(Timeout.InfiniteTimeSpan, shutdown.Token);
+				Task completedTask = await Task.WhenAny(monitor.MonitoringTask, shutdownTask);
+
+				if (completedTask == monitor.MonitoringTask)
+				{
+					await monitor.MonitoringTask;
+				}
+			}
+			finally
+			{
+				Console.CancelKeyPress -= cancelHandler;
+				await monitor.DisposeAsync(); // dispose the monitor sucessfully
 			}
 
+			Logger.PrintLog(LogLevel.Info, "Monitoramento encerrado.");
 			return 0;
+		}
+
+		private static IMonitor CreateMonitor(UserData userData, Alarm alarm)
+		{
+			ConnectionType connectionType = userData.Configuration!.Monitor.ConnectionType!.Value;
+			return connectionType switch
+			{
+				ConnectionType.HttpClient => new MonitorHttp(userData, alarm),
+				ConnectionType.WebSocket => new MonitorWebSocket(userData, alarm),
+				_ => throw new InvalidOperationException($"Tipo de conexão não suportado: {connectionType}.")
+			};
 		}
 	}
 }
