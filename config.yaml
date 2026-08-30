@@ -1,6 +1,6 @@
 # configuração da aplicação
 monitor:
-  connectionType: HttpClient
+  connectionType: WebSocket ## WebSocket ou Http
   requestIntervalSeconds: 5 ## only in HttpMode
 
 # TODO: essa parte provavelmente n vai ser usanda colocanqui aqui pro simplicidade,
@@ -10,11 +10,11 @@ monitor:
 #   webSocketUrl: "wss://api.example.com/stream"
 
 smtp:
-  host: "smtp.example.com"
+  host: "smtp-relay.brevo.com"
   port: 587
   useSsl: true
-  from: "stock-monitor@example.com"
-  to: "alerts@example.com"
+  from: "vitorr2009@gmail.com"
+  to: "vitorr2009@gmail.com"
 
 alerts:
   sendIntervalSeconds: 5

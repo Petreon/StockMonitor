@@ -36,9 +36,11 @@ namespace StockMonitor
 				return 1;
 			}
 
-			Alarm alarm = new(userData);
+			await using Alarm alarm = new(userData);
 
 			await using IMonitor monitor = CreateMonitor(userData, alarm);
+
+			// shutdown do Ctrl+C do console pra poder finalizar o programa:
 			using CancellationTokenSource shutdown = new();
 			ConsoleCancelEventHandler cancelHandler = (_, eventArgs) =>
 			{
