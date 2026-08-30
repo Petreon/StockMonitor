@@ -16,6 +16,7 @@ namespace StockMonitor.ConfReader
 
 			mEnvPath = ResolveEnvPath(envPath);
 			Credentials = ReadEnv();
+			Logger.PrintLog(LogLevel.Info, $"Credenciais do arquivo .env carregadas: '{mEnvPath}'.");
 		}
 
 		public EnvironmentConfiguration Credentials { get; }

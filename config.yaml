@@ -1,7 +1,7 @@
 # configuração da aplicação
 monitor:
   connectionType: HttpClient
-  requestIntervalSeconds: 5
+  requestIntervalSeconds: 5 ## only in HttpMode
 
 # TODO: essa parte provavelmente n vai ser usanda colocanqui aqui pro simplicidade,
 # as URLs ficaram internamente no codigo, pois, tem que buildas as stringp, de request e sera suportada um tipo de API somente.

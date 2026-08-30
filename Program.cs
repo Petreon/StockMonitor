@@ -1,10 +1,11 @@
 ﻿using StockMonitor.ConfReader;
+using StockMonitor.Monitor;
 
 namespace StockMonitor
 {
 	internal class Program
 	{
-		static int Main(string[] args)
+		static async Task<int> Main(string[] args)
 		{
 			UserData userData;
 
@@ -35,10 +36,16 @@ namespace StockMonitor
 				return 1;
 			}
 
-			//TODO: essa implementação vai ser mudada para usar um IMonitor para conseguir separar
-			// a interface de conexão Http e Websocket.
-			//Monitor monitor		= new(userData, ConnectionType.HttpClient, "TODO"); //
 			Alarm alarm			= new(userData);
+
+			// starts the monitoring Task in background
+			await using IMonitor monitor = new MonitorHttp(userData, alarm);
+
+
+			while (true)
+			{
+				
+			}
 
 			return 0;
 		}
