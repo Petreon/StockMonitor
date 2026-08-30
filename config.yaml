@@ -1,0 +1,21 @@
+# configuração da aplicação
+monitor:
+  connectionType: HttpClient
+  requestIntervalSeconds: 5
+
+# TODO: essa parte provavelmente n vai ser usanda colocanqui aqui pro simplicidade,
+# as URLs ficaram internamente no codigo, pois, tem que buildas as stringp, de request e sera suportada um tipo de API somente.
+# api:
+#   httpUrl: "https://api.example.com/quote"
+#   webSocketUrl: "wss://api.example.com/stream"
+
+smtp:
+  host: "smtp.example.com"
+  port: 587
+  useSsl: true
+  from: "stock-monitor@example.com"
+  to: "alerts@example.com"
+
+alerts:
+  sendIntervalSeconds: 5
+  maxQueuedEvents: 10

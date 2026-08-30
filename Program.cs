@@ -16,7 +16,8 @@
 			}
 
 			Logger.PrintLog(LogLevel.Info, $"Dados da ação '{userData.StockSymbol}' inicializados.");
-			ConfRead confRead	= new(userData);
+			// foi adicionado uma configuração no .cs project para facilitar, a leitura do path do .yaml e criada uma copia no root do binario.
+			ConfRead confRead	= new(userData, "config.yaml"); 
 			//TODO: essa implementação vai ser mudada para usar um IMonitor para conseguir separar
 			// a interface de conexão Http e Websocket.
 			//Monitor monitor		= new(userData, ConnectionType.HttpClient, "TODO"); //

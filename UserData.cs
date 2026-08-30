@@ -1,4 +1,5 @@
 using System.Globalization;
+using static StockMonitor.Logger;
 
 namespace StockMonitor
 {
@@ -26,6 +27,8 @@ namespace StockMonitor
 			StockSymbol = stockSymbol.Trim();
 			MinimumPrice = minimumPrice;
 			MaximumPrice = maximumPrice;
+
+			Logger.PrintLog(LogLevel.Info, $"Dados do usuário: {StockSymbol}, {MinimumPrice}, {MaximumPrice}");
 		}
 
 		public static UserData FromArgs(string[] args)

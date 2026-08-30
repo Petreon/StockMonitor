@@ -5,7 +5,7 @@ Requisitos:
 - Ler argumentos: ação Preçomin preçomax
 - ter um arquivo conf, que possui as configurações de acesso do servidor SMTP
 	- Utilizar Yaml para facilitar o desenvolvimento
-	- colocar as credenciais em um .env para não expor as Keys no repositório publico
+	- colocar as credenciais em um .env para não expor as Keys no repositório publico: token das APIs, usuario SMTP e senha SMTP, o servidor e a porta vai ser passado via config.Yaml
 	- Yaml deve ter:
 		- endereço das conexões do servidor SMTP
 		- o tipo de conexão a ser usada WebSocket ou HttpClient
@@ -15,6 +15,8 @@ Requisitos:
 	- Deve-se ter uma thread ou task em background após a inicialização do programa para a cada intervalo de tempo buscar o preço atual 	da ação (pooling por praticidade)
 	- e possível no arquivo de configuração setar de quanto em quanto tempo deve se fazer um request para pegar um preço da ação
 - Caso o valor da ação Bata em algum limite enviar um alerta para utilizando as configurações do servidor SMTP que ira enviar o email
+
+- Para questão do acesso ao servidor SMTP a implementação SmtpClient da microsoft nao e recomendada mais para novos projetos por questoes de segurança e manutenção, logo utilizarei a MailKit para implementação.
 
 Modularização do código:
 - Classe Logger: para trackear possives erros e logs no console

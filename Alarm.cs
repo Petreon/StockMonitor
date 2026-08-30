@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using static StockMonitor.Logger;
 
 namespace StockMonitor
 {
@@ -15,11 +16,10 @@ namespace StockMonitor
 			if (userData is null)
 			{
 				const string message = "A referência de UserData não pode ser nula.";
-				Logger.PrintLog(LogLevel.Error, message);
-				throw new ArgumentNullException(nameof(userData), message);
+				Logger.LogAndThrow(message, nameof(userData));
 			}
 
-			mUserData = userData;
+			mUserData = userData!;
 		}
 
 	}
