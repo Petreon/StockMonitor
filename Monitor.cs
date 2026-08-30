@@ -1,20 +1,17 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Net.Http;
 
 namespace StockMonitor
 {
-	public enum ConectionType
+	public enum ConnectionType
 	{
-		HttpClient	= 0,
-		WebSocket	= 1,
+		HttpClient = 0,
+		WebSocket = 1,
 	}
-	
+
 	internal class Monitor
 	{
-
+		private readonly UserData mUserData;
+		
 		private String	mStockName;
 		private Task	mMonitorTask;
 		private CancellationTokenSource mCancellationToken;	//cancellation token pra liberar a task
@@ -23,26 +20,32 @@ namespace StockMonitor
 		// não tenha um custo alto
 
 		private HttpClient mHttpClient;		// client para fazer request para api financeira
-		private String mBrapiToken;			// brapi token
-		/// <summary>
-		/// 
-		/// </summary>
-		/// <param name="stock">Stock anme to find it</param>
-		public Monitor(String stock, ConectionType connection, String Token)
-		{
-			mStockName = stock;
+		private String mBrapiToken;         // brapi token
 
-			switch(connection)
+
+		public Monitor(UserData userData, ConnectionType connection, String Token)
+		{
+			if (userData is null)
 			{
-				case ConectionType.HttpClient:
+				const string message = "A referência de UserData não pode ser nula.";
+				Logger.PrintLog(LogLevel.Error, message);
+				throw new ArgumentNullException(nameof(userData), message);
+			}
+
+			//TODO: essa implementação vai ser mudada para usar um IMonitor para conseguir separar
+			// a interface de conexão Http e Websocket.
+
+			mUserData = userData;
+			switch (connection)
+			{
+				case ConnectionType.HttpClient:
 					mHttpClient = new HttpClient();
 					mMonitorTask = Task.Run(HttpMonitor);
 					break;
-				case ConectionType.WebSocket:
+				case ConnectionType.WebSocket:
 					break;
 			}
 		}
-
 		private async Task HttpMonitor()
 		{
 			mCancellationToken = new CancellationTokenSource();

@@ -21,6 +21,9 @@ Modularização do código:
 - Classe Monitor: vai rodar a thread em background, configurações de API, e requests
 - Classe ConfRead: vai ler o arquivo conf e salvar os dados na inicialização.
 - Classe Alarm: vai checar para ver se o ultimo valor requerido precisa ou não acionar um email.
+- classe UserData: vai receber os dados da linha de comando, Yaml e .env, para as outras classes conseguirem fazer o gerenciamento necessario.
+
+- Iterface: IMonitor: interface criada para gerenciar que tipo de requisição e monitoramento usuario quer fazer baseado no tipo de API que ele quer usar, se e via websocket ou HttpClient
 
 
 Por falta de tempo e pela complexidade baixa implementar utilizando:

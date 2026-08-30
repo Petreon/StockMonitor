@@ -2,22 +2,27 @@
 {
 	internal class Program
 	{
-		private const Int32 NUMBERARGS = 3;
-	
-		private static ConfRead		mConfRead;			// ConfRead para ler o arquivo yaml e conseguir lidar com possiveis casos do programa.
-		private static Monitor		mMonitor;			// background thread/task para monitorar o preço da ação.
-		private static Alarm		mAlarm;				// Classe para saber quando deve gerar um alarme.
-
-
-		static void Main(string[] args)
+		static int Main(string[] args)
 		{
-			if(args.Length != NUMBERARGS)
+			UserData userData;
+
+			try
 			{
-				Logger.PrintLog(LogLevel.Error, $"Erro na inicilização, quantidades de argumentos invalidas requer {NUMBERARGS}, Recebido {args.Length}");
+				userData = UserData.FromArgs(args);
+			}
+			catch (ArgumentException)
+			{
+				return 1;
 			}
 
-						
+			Logger.PrintLog(LogLevel.Info, $"Dados da ação '{userData.StockSymbol}' inicializados.");
+			ConfRead confRead	= new(userData);
+			//TODO: essa implementação vai ser mudada para usar um IMonitor para conseguir separar
+			// a interface de conexão Http e Websocket.
+			//Monitor monitor		= new(userData, ConnectionType.HttpClient, "TODO"); //
+			Alarm alarm			= new(userData);
 
+			return 0;
 		}
 	}
 }
