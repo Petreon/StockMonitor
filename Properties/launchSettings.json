@@ -2,7 +2,7 @@
   "profiles": {
     "StockMonitor": {
       "commandName": "Project",
-      "commandLineArgs": "PETR4 23.45 25.6"
+      "commandLineArgs": "BTCUSDT 23.45 25.6"
     }
   }
 }

@@ -3,18 +3,18 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using StockMonitor.ConfReader;
+using System.Threading.Channels;
 
 namespace StockMonitor.Monitor
 {
 	internal sealed class MonitorWebSocket : IMonitor
 	{
-		private const string BinanceWebSocketEndpoint = "wss://ws-api.binance.com/ws-api/v3";
-		private const string TickerPriceMethod = "ticker.price";
+		private const string BinanceStreamEndpoint = "wss://stream.binance.com:9443/stream";
+		private const string AggregateTradeSuffix = "@aggTrade";
+		private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
 
 		private readonly Alarm mAlarm;
 		private readonly UserData mUserData;
-		private readonly TimeSpan mPollingInterval;
 		private readonly CancellationTokenSource mCancellationTokenSource;
 		private readonly Task mMonitorTask;
 		private bool mDisposed;
@@ -44,7 +44,6 @@ namespace StockMonitor.Monitor
 
 			mUserData = validUserData;
 			mAlarm = alarm!;
-			mPollingInterval = TimeSpan.FromSeconds(validUserData.Configuration!.Monitor.RequestIntervalSeconds);
 			mCancellationTokenSource = new CancellationTokenSource();
 			mMonitorTask = Task.Run(() => RunAsync(mCancellationTokenSource.Token));
 		}
@@ -57,19 +56,12 @@ namespace StockMonitor.Monitor
 				{
 					try
 					{
-						using ClientWebSocket webSocket = new();
-						await webSocket.ConnectAsync(new Uri(BinanceWebSocketEndpoint), cancellationToken);
-						Logger.PrintLog(LogLevel.Info, $"Conexão WebSocket aberta: {BinanceWebSocketEndpoint}.");
-
-						while (webSocket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
+						await RunConnectionAsync(cancellationToken);
+						if (!cancellationToken.IsCancellationRequested)
 						{
-							bool connectionIsUsable = await RequestPriceAsync(webSocket, cancellationToken);
-							if (!connectionIsUsable)
-							{
-								break;
-							}
-
-							await Task.Delay(mPollingInterval, cancellationToken);
+							Logger.PrintLog(
+								LogLevel.Warn,
+								"A conexão WebSocket da Binance foi perdida. Uma nova conexão será tentada.");
 						}
 					}
 					catch (WebSocketException exception)
@@ -87,7 +79,7 @@ namespace StockMonitor.Monitor
 
 					if (!cancellationToken.IsCancellationRequested)
 					{
-						await Task.Delay(mPollingInterval, cancellationToken);
+						await Task.Delay(ReconnectDelay, cancellationToken);
 					}
 				}
 			}
@@ -97,75 +89,153 @@ namespace StockMonitor.Monitor
 			}
 		}
 
-		private async Task<bool> RequestPriceAsync(ClientWebSocket webSocket, CancellationToken cancellationToken)
+		private async Task RunConnectionAsync(CancellationToken cancellationToken)
 		{
-			string requestJson = JsonSerializer.Serialize(new BinanceTickerPriceRequest
+			using ClientWebSocket webSocket = new();
+			await webSocket.ConnectAsync(new Uri(BinanceStreamEndpoint), cancellationToken);
+			if(webSocket.State != WebSocketState.Open)
 			{
-				Id = Guid.NewGuid().ToString(),
-				Method = TickerPriceMethod,
-				Parameters = new BinanceTickerPriceParameters
-				{
-					Symbol = mUserData.StockSymbol.ToUpperInvariant()
-				}
+				Logger.PrintLog(LogLevel.Error, "Falha ao abrir a conexão WebSocket da Binance.");
+				throw new InvalidOperationException("Falha ao abrir a conexão WebSocket da Binance.");
+			}
+			Logger.PrintLog(LogLevel.Info, $"Conexão WebSocket aberta: {BinanceStreamEndpoint}.");
+
+			using CancellationTokenSource connectionCancellation =
+				CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+			Channel<string> outgoingMessages = Channel.CreateUnbounded<string>(new UnboundedChannelOptions
+			{
+				SingleReader = true,
+				SingleWriter = true
 			});
 
-			byte[] requestBytes = Encoding.UTF8.GetBytes(requestJson);
-			await webSocket.SendAsync(
-				new ArraySegment<byte>(requestBytes),
-				WebSocketMessageType.Text,
-				endOfMessage: true,
-				cancellationToken);
+			Task sendTask = SendMessagesAsync(webSocket, outgoingMessages.Reader, connectionCancellation.Token);
+			
+			Task receiveTask = ReceiveMessagesAsync(webSocket, connectionCancellation.Token);
 
-			string? responseJson = await ReceiveMessageAsync(webSocket, cancellationToken);
-			if (responseJson is null)
-			{
-				Logger.PrintLog(LogLevel.Warn, "A conexão WebSocket da Binance foi encerrada pelo servidor.");
-				return false;
-			}
+			// create a subscriber in a topic/"stock"
+			outgoingMessages.Writer.TryWrite(CreateSubscriptionMessage());
 
-			BinanceWebSocketResponse? response;
 			try
 			{
-				response = JsonSerializer.Deserialize<BinanceWebSocketResponse>(responseJson);
+				await Task.WhenAny(sendTask, receiveTask);
 			}
-			catch (JsonException exception)
+			finally
+			{
+				connectionCancellation.Cancel();
+				outgoingMessages.Writer.TryComplete();
+			}
+
+			try
+			{
+				await Task.WhenAll(sendTask, receiveTask);
+			}
+			catch (OperationCanceledException) when (connectionCancellation.IsCancellationRequested)
+			{
+				// Uma das tasks encerrou a conexão ou o encerramento foi solicitado.
+			}
+		}
+
+		private async Task SendMessagesAsync(
+			ClientWebSocket webSocket,
+			ChannelReader<string> outgoingMessages,
+			CancellationToken cancellationToken)
+		{
+			await foreach (string message in outgoingMessages.ReadAllAsync(cancellationToken))
+			{
+				byte[] messageBytes = Encoding.UTF8.GetBytes(message);
+				await webSocket.SendAsync(
+					new ArraySegment<byte>(messageBytes),
+					WebSocketMessageType.Text,
+					endOfMessage: true,
+					cancellationToken);
+			}
+		}
+
+		private async Task ReceiveMessagesAsync(
+			ClientWebSocket webSocket,
+			CancellationToken cancellationToken)
+		{
+			while (webSocket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
+			{
+				string? message = await ReceiveMessageAsync(webSocket, cancellationToken);
+				if (message is null)
+				{
+					return;
+				}
+
+				ProcessMessage(message);
+			}
+		}
+
+		private void ProcessMessage(string message)
+		{
+			using JsonDocument document = JsonDocument.Parse(message);
+			JsonElement root = document.RootElement;
+			JsonElement eventPayload = root;
+
+			if (root.TryGetProperty("data", out JsonElement dataElement) &&
+				dataElement.ValueKind == JsonValueKind.Object)
+			{
+				eventPayload = dataElement;
+			}
+
+			if (!eventPayload.TryGetProperty("e", out _))
+			{
+				if (root.TryGetProperty("code", out JsonElement codeElement))
+				{
+					string errorMessage = root.TryGetProperty("msg", out JsonElement messageElement)
+						? messageElement.GetString() ?? "sem detalhes"
+						: "sem detalhes";
+					Logger.PrintLog(
+						LogLevel.Error,
+						$"Erro ao inscrever o stream da Binance. Código: {codeElement}. " +
+						$"Mensagem: {errorMessage}. JSON de saída: {message}");
+					return;
+				}
+
+				if (root.TryGetProperty("result", out _))
+				{
+					Logger.PrintLog(LogLevel.Info, "Inscrição no stream de preço da Binance confirmada.");
+					return;
+				}
+
+				Logger.PrintLog(LogLevel.Warn, $"Mensagem WebSocket não reconhecida. JSON de saída: {message}");
+				return;
+			}
+
+			BinanceAggregateTradeEvent? tradeEvent =
+				eventPayload.Deserialize<BinanceAggregateTradeEvent>();
+			if (tradeEvent is null || !string.Equals(tradeEvent.EventType, "aggTrade", StringComparison.Ordinal))
+			{
+				return;
+			}
+
+			if (!TryReadPrice(tradeEvent.Price, out decimal price))
 			{
 				Logger.PrintLog(
 					LogLevel.Error,
-					$"Erro ao interpretar o JSON de saída da Binance: {exception.Message}. JSON de saída: {responseJson}");
-				return true;
+					$"O evento da Binance não contém um preço válido. JSON de saída: {message}");
+				return;
 			}
 
-			if (response is null)
+			string symbol = string.IsNullOrWhiteSpace(tradeEvent.Symbol)
+				? mUserData.StockSymbol.ToUpperInvariant()
+				: tradeEvent.Symbol;
+			DateTimeOffset timestamp = tradeEvent.EventTime > 0
+				? DateTimeOffset.FromUnixTimeMilliseconds(tradeEvent.EventTime)
+				: DateTimeOffset.UtcNow;
+
+			mAlarm.TryEnqueuePrice(new PriceReading(symbol, price, timestamp));
+		}
+
+		private string CreateSubscriptionMessage()
+		{
+			return JsonSerializer.Serialize(new BinanceSubscriptionRequest
 			{
-				Logger.PrintLog(LogLevel.Error, $"A Binance retornou um JSON vazio. JSON de saída: {responseJson}");
-				return true;
-			}
-
-			if (response.Status != 200)
-			{
-				string errorMessage = response.Error is null
-					? "sem detalhes de erro"
-					: $"código {response.Error.Code}: {response.Error.Message}";
-				Logger.PrintLog(
-					LogLevel.Error,
-					$"A Binance retornou status {response.Status} ({errorMessage}). JSON de saída: {responseJson}");
-				return true;
-			}
-
-			if (response.Result is null || !TryReadPrice(response.Result.Price, out decimal price))
-			{
-				Logger.PrintLog(
-					LogLevel.Error,
-					$"A resposta da Binance não contém um preço válido. JSON de saída: {responseJson}");
-				return true;
-			}
-
-			string symbol = string.IsNullOrWhiteSpace(response.Result.Symbol)
-				? mUserData.StockSymbol
-				: response.Result.Symbol;
-			mAlarm.TryEnqueuePrice(new PriceReading(symbol, price, DateTimeOffset.UtcNow));
-			return true;
+				Method = "SUBSCRIBE",
+				Parameters = new[] { $"{mUserData.StockSymbol.ToLowerInvariant()}{AggregateTradeSuffix}" },
+				Id = Guid.NewGuid().ToString()
+			});
 		}
 
 		private static async Task<string?> ReceiveMessageAsync(
@@ -186,6 +256,11 @@ namespace StockMonitor.Monitor
 					return null;
 				}
 
+				if (result.MessageType != WebSocketMessageType.Text)
+				{
+					continue;
+				}
+
 				messageStream.Write(buffer, 0, result.Count);
 				if (result.EndOfMessage)
 				{
@@ -202,7 +277,11 @@ namespace StockMonitor.Monitor
 			}
 
 			if (priceElement.ValueKind == JsonValueKind.String &&
-				decimal.TryParse(priceElement.GetString(), NumberStyles.Number, CultureInfo.InvariantCulture, out price))
+				decimal.TryParse(
+					priceElement.GetString(),
+					NumberStyles.Number,
+					CultureInfo.InvariantCulture,
+					out price))
 			{
 				return true;
 			}
@@ -233,52 +312,31 @@ namespace StockMonitor.Monitor
 			mCancellationTokenSource.Dispose();
 		}
 
-		private sealed class BinanceTickerPriceRequest
+		private sealed class BinanceSubscriptionRequest
 		{
-			[JsonPropertyName("id")]
-			public string Id { get; init; } = string.Empty;
-
 			[JsonPropertyName("method")]
 			public string Method { get; init; } = string.Empty;
 
 			[JsonPropertyName("params")]
-			public BinanceTickerPriceParameters Parameters { get; init; } = new();
+			public string[] Parameters { get; init; } = Array.Empty<string>();
+
+			[JsonPropertyName("id")]
+			public string Id { get; init; } = string.Empty;
 		}
 
-		private sealed class BinanceTickerPriceParameters
+		private sealed class BinanceAggregateTradeEvent
 		{
-			[JsonPropertyName("symbol")]
-			public string Symbol { get; init; } = string.Empty;
-		}
+			[JsonPropertyName("e")]
+			public string? EventType { get; init; }
 
-		private sealed class BinanceWebSocketResponse
-		{
-			[JsonPropertyName("status")]
-			public int Status { get; init; }
+			[JsonPropertyName("E")]
+			public long EventTime { get; init; }
 
-			[JsonPropertyName("result")]
-			public BinanceTickerPriceResult? Result { get; init; }
-
-			[JsonPropertyName("error")]
-			public BinanceWebSocketError? Error { get; init; }
-		}
-
-		private sealed class BinanceTickerPriceResult
-		{
-			[JsonPropertyName("symbol")]
+			[JsonPropertyName("s")]
 			public string? Symbol { get; init; }
 
-			[JsonPropertyName("price")]
+			[JsonPropertyName("p")]
 			public JsonElement Price { get; init; }
-		}
-
-		private sealed class BinanceWebSocketError
-		{
-			[JsonPropertyName("code")]
-			public int Code { get; init; }
-
-			[JsonPropertyName("msg")]
-			public string Message { get; init; } = string.Empty;
 		}
 	}
 }
