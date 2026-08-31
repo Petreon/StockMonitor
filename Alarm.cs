@@ -87,14 +87,14 @@ namespace StockMonitor
 
 					if (lastAlertAttempt is not null)
 					{
-						TimeSpan elapsed = DateTimeOffset.UtcNow - lastAlertAttempt.Value;
-						TimeSpan remaining = mSendInterval - elapsed;
-						if (remaining > TimeSpan.Zero)
-						{
-							await Task.Delay(remaining, cancellationToken);
-						}
+					    TimeSpan elapsed = DateTimeOffset.UtcNow - lastAlertAttempt.Value;
+					    if (elapsed < mSendInterval)
+					    {
+					        // Ignora este evento para não acumular/atrasar a fila
+					        continue; 
+					    }
 					}
-
+					
 					lastAlertAttempt = DateTimeOffset.UtcNow;
 					await SendAlertAsync(reading, cancellationToken);
 				}
